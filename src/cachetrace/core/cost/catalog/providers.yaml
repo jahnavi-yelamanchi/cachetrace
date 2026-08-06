@@ -1,0 +1,18 @@
+# Hosted-provider input token pricing, USD per 1M input tokens.
+# `input` = normal (uncached) input price; `cache_read` = cached/discounted price.
+# The waste from a busted prefix is (input - cache_read) per recoverable token,
+# because those tokens were billed at full price instead of the cache-read rate.
+# Prices are approximate list prices for a representative flagship model per
+# provider and change often — override with --price-per-token when it matters.
+openai:
+  input: 2.50
+  cache_read: 1.25   # 50% off cached input
+anthropic:
+  input: 3.00
+  cache_read: 0.30   # cache read ~10% of input
+google:
+  input: 1.25
+  cache_read: 0.3125 # ~75% off with context caching
+deepseek:
+  input: 0.27
+  cache_read: 0.027  # ~90% off cache hit

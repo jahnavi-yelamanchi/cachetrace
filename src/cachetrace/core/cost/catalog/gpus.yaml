@@ -1,0 +1,24 @@
+# Illustrative defaults for prefill cost modeling. Numbers assume a ~7-8B dense
+# model in bf16 and typical cloud on-demand pricing; override per-deployment via
+# --price-per-gpu-hour / --price-per-token or a cachetrace.toml.
+#
+# price_per_hour: USD per GPU-hour (on-demand ballpark)
+# prefill_tokens_per_sec: sustained prefill throughput per GPU for the reference model
+h100:
+  price_per_hour: 3.50
+  prefill_tokens_per_sec: 9000
+h200:
+  price_per_hour: 4.50
+  prefill_tokens_per_sec: 11000
+a100:
+  price_per_hour: 1.80
+  prefill_tokens_per_sec: 4500
+a10g:
+  price_per_hour: 1.00
+  prefill_tokens_per_sec: 1800
+l40s:
+  price_per_hour: 1.20
+  prefill_tokens_per_sec: 3000
+l4:
+  price_per_hour: 0.70
+  prefill_tokens_per_sec: 1200

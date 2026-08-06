@@ -1,0 +1,7 @@
+# Relative prefill efficiency multiplier applied to the GPU's reference throughput.
+# vLLM is the baseline (1.0). SGLang's RadixAttention is slightly ahead on
+# prefix-heavy workloads; TGI a touch behind. Adjust for your build.
+vllm: 1.00
+sglang: 1.05
+tgi: 0.90
+trtllm: 1.10

@@ -1,0 +1,17 @@
+# cachetrace configuration. Copy to `cachetrace.toml`; CLI flags override these.
+[cachetrace]
+# --- model / tokenization ---
+model = "gpt-4o"          # picks tokenizer + chat template; omit to auto-detect
+# tokenizer = "auto"      # auto | tiktoken | hf | fallback
+
+# --- engine / radix simulation ---
+engine = "vllm"           # vllm | sglang | tgi
+block_size = 16           # KV block size in tokens (vLLM 16, SGLang 1)
+# cache_blocks = 8000     # KV capacity in blocks; omit for unbounded (no eviction)
+
+# --- cost model ---
+gpu = "h100"              # h100 | h200 | a100 | a10g | l40s | l4
+monthly_volume = 1_000_000
+# price_per_gpu_hour = 3.50   # override the catalog default
+# price_per_token = 0.0000002 # override derived $/uncached-prefill-token
+# provider = "openai"     # use hosted cached-vs-uncached pricing instead of GPU cost
