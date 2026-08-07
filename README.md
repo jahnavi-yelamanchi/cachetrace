@@ -27,42 +27,24 @@ pip install "cachetrace[all]"   # + real tokenizers, proxy, dashboard
 cachetrace demo          # runs on a bundled agent trace
 ```
 
-```text
-╭───────────────── cachetrace audit ─────────────────╮
-│            Requests  40                             │
-│               Model  gpt-4o                         │
-│     Actual hit rate  29.3%                          │
-│ Achievable hit rate  95.5%                          │
-│     Recoverable gap  +66.3%                         │
-╰────────────────────────────────────────────────────╯
-        Top cache-busters (by prefill tokens wasted)
-┏━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃ Root cause   ┃ Where  ┃ Requests busted ┃ Tokens wasted ┃
-┡━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-│ 🔑 uuid      │ system │           97.5% │        10,904 │
-│ 🔀 reordering│ tools  │           45.0% │         1,248 │
-│ 🕒 timestamp │ system │           97.5% │           584 │
-└──────────────┴────────┴─────────────────┴───────────────┘
-💸 Estimated waste: $34/month at 1M req/mo (H100, vLLM)
-```
+<p align="center"><img src="assets/terminal.png" alt="cachetrace audit and fix in the terminal" width="820"></p>
 
-Then get the fix:
+The `fix` number is **verified**: it's measured by actually applying the emitted rules
+and re-simulating, so cachetrace never overclaims. `cachetrace fix requests.jsonl --out
+./fix` writes both a declarative `cachetrace_fix.yaml` and a drop-in
+`cachetrace_canonical.py`.
 
-```bash
-cachetrace fix requests.jsonl --out ./fix
-```
+## Dashboard
 
-```text
-╭──────────────────── cachetrace fix ────────────────────╮
-│ Verified hit rate 95% (was 29%, +65%)                  │
-│ ✓ measured by applying the emitted rules               │
-╰────────────────────────────────────────────────────────╯
-wrote ./fix/cachetrace_fix.yaml          # declarative rules
-wrote ./fix/cachetrace_canonical.py      # drop-in transform
-```
+`cachetrace serve --trace requests.jsonl` (or `cachetrace audit --html report.html`) gives
+you a self-contained, shareable view of the same analysis:
 
-The projected number is **verified**: it's measured by actually applying the emitted
-rules and re-simulating, so cachetrace never overclaims.
+<p align="center"><img src="assets/dashboard.png" alt="cachetrace web dashboard" width="820"></p>
+
+## Why this is different
+
+Everyone else shows you a hit-rate number. cachetrace tells you the **root cause**, the
+**template location**, the **dollar cost**, and hands you the **rewrite**:
 
 ## Why this is different
 
