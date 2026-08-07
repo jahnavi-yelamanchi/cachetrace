@@ -88,6 +88,20 @@ Everyone else shows you a hit-rate number. cachetrace tells you the **root cause
 - **Cost model per GPU + engine + provider.** Self-hosted ($/GPU-hour ÷ prefill
   throughput) or hosted (input vs cache-read price), projected to your monthly volume.
 
+## Benchmark: real-world receipts
+
+`cachetrace bench` reconstructs the **default** prompt construction of popular agent
+frameworks and audits it. Their out-of-the-box templates leave a lot on the table
+(approximate tokenizer, H100 + vLLM, 1M req/mo; full report in
+[`BENCHMARK.md`](BENCHMARK.md)):
+
+| Framework | Actual hit rate | Achievable | Gap | Top cache-buster |
+|---|---:|---:|---:|---|
+| LangChain ReAct agent | 14% | 94% | **+80%** | timestamp in `system` |
+| CrewAI crew | 22% | 92% | **+70%** | uuid in `system` |
+| OpenAI Agents tool loop | 83% | 91% | **+8%** | reordering in `tools` |
+| RAG chat | 0% | 85% | **+85%** | random_id in `system` |
+
 ## Usage
 
 ```bash
@@ -103,8 +117,21 @@ cachetrace fix requests.jsonl --out ./fix --emit both
 # Explain one request's divergence
 cachetrace explain requests.jsonl req-17
 
-# Machine-readable output for CI
+# Self-contained interactive HTML report
+cachetrace audit requests.jsonl --html report.html
+
+# Machine-readable output for CI + a regression gate
 cachetrace audit requests.jsonl --json
+cachetrace diff before.jsonl after.jsonl --threshold 0.05   # non-zero exit on regression
+
+# Interactive web dashboard (needs cachetrace[web])
+cachetrace serve --trace requests.jsonl
+
+# Drop-in recording + fixing proxy (needs cachetrace[proxy])
+cachetrace proxy --upstream https://api.openai.com --record traffic.jsonl --fix-rules ./fix/cachetrace_fix.yaml
+
+# Benchmark popular agent frameworks' default prompts
+cachetrace bench --out BENCHMARK.md
 ```
 
 ### Input format
@@ -150,12 +177,13 @@ monthly_volume = 2_000_000
 ## Roadmap
 
 - [x] Core engine: tokenize, radix simulate, attribute, cost
-- [x] `audit` + `fix` (verified, no-overclaim) + `explain`
-- [x] Provider-agnostic ingest (OpenAI-compatible, Anthropic)
-- [ ] More providers: Gemini/Vertex, Bedrock, agent-framework traces
-- [ ] Live drop-in recording + canonicalizing **proxy**
-- [ ] Local **web dashboard** (`cachetrace serve`)
-- [ ] `cachetrace bench`: wasted-cache findings across popular agent frameworks
+- [x] `audit` + `fix` (verified, no-overclaim) + `explain` + `diff` + `init`
+- [x] Provider-agnostic ingest: OpenAI-compatible, Anthropic, Gemini, Bedrock, agent-framework traces, vLLM logs
+- [x] Self-contained HTML report (`--html`) + local **web dashboard** (`cachetrace serve`)
+- [x] Live drop-in recording + canonicalizing **proxy** (`cachetrace proxy`)
+- [x] `cachetrace bench`: wasted-cache findings across popular agent frameworks
+- [ ] Real-tokenizer CI parity fixtures + upstream PRs from the benchmark
+- [ ] Optional React dashboard build
 
 ## Development
 

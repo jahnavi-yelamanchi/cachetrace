@@ -294,6 +294,89 @@ def proxy(
 
 
 @app.command()
+def bench(
+    frameworks: list[str] = typer.Argument(None, help="Frameworks to run (default: all)."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Write a Markdown findings report."),
+    volume: int = VolumeOpt,
+    gpu: str = GpuOpt,
+) -> None:
+    """Benchmark the default prompt construction of popular agent frameworks."""
+    from rich.table import Table
+
+    from cachetrace.bench.frameworks import FRAMEWORKS
+    from cachetrace.bench.run import render_markdown, run_benchmark
+
+    cfg = _build_config(config=None, tokenizer="fallback", gpu=gpu, engine="vllm", volume=volume)
+    names = [f for f in (frameworks or []) if f in FRAMEWORKS] or None
+    results = run_benchmark(names, cfg)
+
+    t = Table(title="cachetrace benchmark: wasted prefix cache in default agent prompts",
+              header_style="bold magenta")
+    t.add_column("Framework")
+    t.add_column("Actual", justify="right")
+    t.add_column("Achievable", justify="right")
+    t.add_column("Gap", justify="right")
+    t.add_column("Top buster")
+    t.add_column("Waste/mo", justify="right")
+    for r in results:
+        t.add_row(r.label, f"{r.actual:.0%}", f"{r.achievable:.0%}",
+                  f"+{r.gap:.0%}", f"{r.top_cause} in {r.top_location}", f"${r.monthly_waste_usd:,.0f}")
+    console.print(t)
+
+    if out:
+        out.write_text(render_markdown(results, cfg), encoding="utf-8")
+        console.print(f"[green]wrote[/green] {out}")
+
+
+@app.command()
+def diff(
+    baseline: Path = typer.Argument(..., help="Baseline JSONL trace."),
+    candidate: Path = typer.Argument(..., help="Candidate JSONL trace."),
+    model: str | None = ModelOpt,
+    tokenizer: str | None = TokenizerOpt,
+    threshold: float = typer.Option(0.0, "--threshold", help="Fail if hit rate drops more than this (0-1)."),
+) -> None:
+    """Compare two traces' prefix-cache hit rate. Exit non-zero on a regression (for CI)."""
+    cfg = _build_config(config=None, model=model, tokenizer=tokenizer)
+    a = audit(_load(baseline, None, None), cfg)
+    b = audit(_load(candidate, None, None), cfg)
+    delta = b.actual.token_hit_rate - a.actual.token_hit_rate
+    arrow = "↑" if delta >= 0 else "↓"
+    style = "green" if delta >= -threshold else "red"
+    console.print(
+        f"baseline {a.actual.token_hit_rate:.1%} → candidate {b.actual.token_hit_rate:.1%} "
+        f"[{style}]{arrow} {delta:+.1%}[/{style}]"
+    )
+    if delta < -threshold:
+        console.print(f"[red]Regression: hit rate dropped more than {threshold:.1%}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def init(
+    path: Path = typer.Option("cachetrace.toml", "--path", help="Where to write the config."),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing file."),
+) -> None:
+    """Scaffold a cachetrace.toml config file."""
+    example = Path(__file__).parent.parent.parent.parent / "cachetrace.toml.example"
+    template = example.read_text(encoding="utf-8") if example.exists() else _DEFAULT_CONFIG_TEMPLATE
+    if path.exists() and not force:
+        console.print(f"[yellow]{path} already exists[/yellow] (use --force to overwrite)")
+        raise typer.Exit(1)
+    path.write_text(template, encoding="utf-8")
+    console.print(f"[green]wrote[/green] {path}")
+
+
+_DEFAULT_CONFIG_TEMPLATE = """[cachetrace]
+model = "gpt-4o"
+engine = "vllm"
+gpu = "h100"
+block_size = 16
+monthly_volume = 1_000_000
+"""
+
+
+@app.command()
 def version() -> None:
     """Print the cachetrace version."""
     console.print(f"cachetrace {__version__}")
