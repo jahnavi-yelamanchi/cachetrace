@@ -11,21 +11,54 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from cachetrace.core.ingest import anthropic, openai
+from cachetrace.core.ingest import (
+    agent_frameworks,
+    anthropic,
+    bedrock,
+    gemini,
+    openai,
+    vllm_log,
+)
 from cachetrace.core.model import Request, RequestBatch
 
 __all__ = ["load_requests", "load_batch", "detect_provider", "from_dict"]
 
+_ADAPTERS = {
+    "anthropic": anthropic.from_dict,
+    "gemini": gemini.from_dict,
+    "bedrock": bedrock.from_dict,
+    "agent": agent_frameworks.from_dict,
+    "vllm": vllm_log.from_dict,
+    "openai": openai.from_dict,
+}
+
+
+def _is_block_list(content: Any) -> bool:
+    return isinstance(content, list) and any(
+        isinstance(b, dict) and ("text" in b or "toolUse" in b or "toolResult" in b) for b in content
+    )
+
 
 def detect_provider(obj: dict[str, Any]) -> str:
     """Guess which provider format a raw request dict is in."""
+    if "contents" in obj or "systemInstruction" in obj or "system_instruction" in obj:
+        return "gemini"
+    if "toolConfig" in obj or "modelId" in obj:
+        return "bedrock"
+    msgs = obj.get("messages")
+    if isinstance(msgs, list) and msgs and _is_block_list(msgs[0].get("content") if isinstance(msgs[0], dict) else None):
+        return "bedrock"
     if "system" in obj and "messages" in obj:
-        # Anthropic keeps system out of the messages array.
-        return "anthropic"
+        return "anthropic"  # Anthropic keeps system out of the messages array
     if any(isinstance(t, dict) and "input_schema" in t for t in obj.get("tools", []) or []):
         return "anthropic"
-    if "contents" in obj:  # Google Gemini
-        return "gemini"
+    # Agent-framework envelopes hide the payload under a wrapper key.
+    if "messages" not in obj and "prompt" not in obj and any(
+        isinstance(obj.get(k), dict) for k in ("input", "kwargs", "request", "body")
+    ):
+        return "agent"
+    if "prompt" in obj and "messages" not in obj:
+        return "agent"
     if "messages" in obj:
         return "openai"
     return "openai"
@@ -33,11 +66,8 @@ def detect_provider(obj: dict[str, Any]) -> str:
 
 def from_dict(obj: dict[str, Any], *, request_id: str, provider: str | None = None) -> Request:
     provider = provider or detect_provider(obj)
-    if provider == "anthropic":
-        return anthropic.from_dict(obj, request_id=request_id, provider=provider)
-    # gemini/bedrock/etc. fall through to the OpenAI-shaped normalizer for now;
-    # dedicated adapters are added in the providers-breadth milestone.
-    return openai.from_dict(obj, request_id=request_id, provider=provider)
+    adapter = _ADAPTERS.get(provider, openai.from_dict)
+    return adapter(obj, request_id=request_id, provider=provider)
 
 
 def load_requests(
