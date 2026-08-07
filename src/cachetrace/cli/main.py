@@ -88,6 +88,7 @@ def audit_cmd(
     limit: int | None = LimitOpt,
     config: Path | None = ConfigOpt,
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+    html_out: Path | None = typer.Option(None, "--html", help="Write a self-contained HTML report."),
 ) -> None:
     """Report actual vs achievable prefix-cache hit rate, cache-busters, and $ waste."""
     cfg = _build_config(
@@ -95,7 +96,8 @@ def audit_cmd(
         block_size=block_size, cache_blocks=cache_blocks, volume=volume,
         price_per_token=price_per_token, price_per_gpu_hour=price_per_gpu_hour, provider=provider,
     )
-    report = _run_audit(file, cfg, provider, limit)
+    reqs = _load(file, provider, limit)
+    report = audit(reqs, cfg)
     if as_json:
         from cachetrace.report.json_ import audit_to_dict
 
@@ -104,6 +106,13 @@ def audit_cmd(
         from cachetrace.report.terminal import render_audit
 
         render_audit(report, console)
+    if html_out:
+        from cachetrace.core.fix import build_fix_plan
+        from cachetrace.report.html import render_html
+
+        plan = build_fix_plan(report, reqs)
+        html_out.write_text(render_html(report, plan), encoding="utf-8")
+        console.print(f"[green]wrote[/green] {html_out}")
 
 
 @app.command()
@@ -230,6 +239,58 @@ def demo() -> None:
     render_fix(plan, console)
     console.print()
     console.print(emit_rewrite(plan))
+
+
+@app.command()
+def serve(
+    trace: Path = typer.Option(..., "--trace", help="JSONL trace to visualize."),
+    model: str | None = ModelOpt,
+    tokenizer: str | None = TokenizerOpt,
+    gpu: str = GpuOpt,
+    engine: str = EngineOpt,
+    provider: str | None = ProviderOpt,
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8000, "--port"),
+) -> None:
+    """Serve an interactive web dashboard for a trace (needs cachetrace[web])."""
+    try:
+        import uvicorn
+
+        from cachetrace.server.app import create_app
+    except ImportError:
+        console.print("[red]The dashboard needs the web extra:[/red] pip install 'cachetrace[web]'")
+        raise typer.Exit(1) from None
+    cfg = _build_config(config=None, model=model, tokenizer=tokenizer, gpu=gpu, engine=engine, provider=provider)
+    app_ = create_app(trace, cfg)
+    console.print(f"[cyan]cachetrace dashboard[/cyan] → http://{host}:{port}")
+    uvicorn.run(app_, host=host, port=port, log_level="warning")
+
+
+@app.command()
+def proxy(
+    upstream: str = typer.Option(..., "--upstream", help="Upstream base URL, e.g. https://api.openai.com"),
+    record: Path = typer.Option("cachetrace_traffic.jsonl", "--record", help="JSONL sink for recorded traffic."),
+    fix_rules: Path | None = typer.Option(None, "--fix-rules", help="Apply an emitted cachetrace_fix.yaml inline."),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8100, "--port"),
+) -> None:
+    """Run a recording (and optionally fixing) OpenAI/Anthropic-compatible proxy."""
+    try:
+        import uvicorn
+
+        from cachetrace.proxy.server import create_proxy
+    except ImportError:
+        console.print("[red]The proxy needs the proxy extra:[/red] pip install 'cachetrace[proxy]'")
+        raise typer.Exit(1) from None
+    rules = None
+    if fix_rules:
+        from cachetrace.core.fix.runtime import load_rules
+
+        rules = load_rules(fix_rules)
+    app_ = create_proxy(upstream, record, fix_rules=rules)
+    tag = " (applying fix)" if rules else ""
+    console.print(f"[cyan]cachetrace proxy{tag}[/cyan] http://{host}:{port} → {upstream}, recording to {record}")
+    uvicorn.run(app_, host=host, port=port, log_level="warning")
 
 
 @app.command()
