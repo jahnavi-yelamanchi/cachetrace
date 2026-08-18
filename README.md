@@ -46,11 +46,6 @@ you a self-contained, shareable view of the same analysis:
 Everyone else shows you a hit-rate number. cachetrace tells you the **root cause**, the
 **template location**, the **dollar cost**, and hands you the **rewrite**:
 
-## Why this is different
-
-Everyone else shows you a hit-rate number. cachetrace tells you the **root cause**, the
-**template location**, the **dollar cost**, and hands you the **rewrite**:
-
 | | hit rate | why it's low | $ cost | the fix |
 |---|:---:|:---:|:---:|:---:|
 | vLLM / SGLang metrics | ✅ | ❌ | ❌ | ❌ |
